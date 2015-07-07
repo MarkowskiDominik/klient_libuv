@@ -13,7 +13,29 @@
   assert(0);                                                                          \
 } while(0);
 
+void on_connect(uv_connect_t* req, int status);
+void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf);
+void on_write(uv_write_t* req, int status);
+
 uv_loop_t *loop;
+char *message;
+
+int main(int argc, char * argv[]) {
+    loop = uv_default_loop();
+    message = argv[1];
+
+    uv_tcp_t* client = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
+    uv_tcp_init(loop, client);
+
+    uv_connect_t* connect = (uv_connect_t*)malloc(sizeof(uv_connect_t));
+
+    struct sockaddr_in dest;
+    uv_ip4_addr(DEFAULT_ADDRESS, DEFAULT_PORT, &dest);
+
+    uv_tcp_connect(connect, client, (const struct sockaddr*)&dest, on_connect);
+    
+    return uv_run(loop, UV_RUN_DEFAULT);
+}
 
 void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
     *buf = uv_buf_init((char*) malloc(size), size);
@@ -24,7 +46,6 @@ void on_write(uv_write_t* req, int status) {
         fprintf(stderr, "error on_write");
         return;
     }
-    
 }
 
 void on_connect(uv_connect_t* req, int status) {
@@ -33,7 +54,7 @@ void on_connect(uv_connect_t* req, int status) {
         return;
     }
     
-    char *message = "hello.txt";
+    //char *message = "hello.txt";
     int len = strlen(message);
     
     char buffer[100];
@@ -47,20 +68,4 @@ void on_connect(uv_connect_t* req, int status) {
  
     int buf_count = 1;
     uv_write(&write_req, tcp, &buf, buf_count, on_write);
-}
-
-int main() {
-    loop = uv_default_loop();
-
-    uv_tcp_t* client = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
-    uv_tcp_init(loop, client);
-
-    uv_connect_t* connect = (uv_connect_t*)malloc(sizeof(uv_connect_t));
-
-    struct sockaddr_in dest;
-    uv_ip4_addr(DEFAULT_ADDRESS, DEFAULT_PORT, &dest);
-
-    uv_tcp_connect(connect, client, (const struct sockaddr*)&dest, on_connect);
-    
-    return uv_run(loop, UV_RUN_DEFAULT);
 }
