@@ -7,7 +7,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <assert.h>
 #include <string.h>
 #include <uv.h>
 
@@ -22,6 +21,7 @@
 void on_connect(uv_connect_t* req, int status);
 void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf);
 void recv_file(uv_stream_t* server, ssize_t nread, const uv_buf_t* buf);
+void save_file(uv_fs_t* save_req);
 
 int r;
 
@@ -46,11 +46,11 @@ int main(int argc, char * argv[]) {
     r = uv_run(loop, UV_RUN_DEFAULT);
     CHECK(r, "Run");
     
+    free(client);    
     r = uv_loop_close(loop);
     CHECK(r, "Loop close");
-    
-    free(client);
     free(loop);
+    
     return EXIT_SUCCESS;
 }
 
@@ -60,10 +60,11 @@ void on_connect(uv_connect_t* req, int status) {
     uv_buf_t* buf = (uv_buf_t*)malloc(sizeof(uv_buf_t));
     *buf = uv_buf_init((char*)req->handle->data, strlen((char*)req->handle->data));
     
-    uv_write_t* write_req = (uv_write_t*)malloc(sizeof(uv_write_t));    
+    uv_write_t* write_req = (uv_write_t*)malloc(sizeof(uv_write_t));
     uv_write(write_req, req->handle, buf, 1, NULL);
     
     uv_read_start((uv_stream_t*)req->handle, alloc_buffer, recv_file);
+    free(buf);
 }
 
 void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
@@ -71,10 +72,30 @@ void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
 }
 
 void recv_file(uv_stream_t* server, ssize_t nread, const uv_buf_t* buf) {
+    fprintf(stdout, "nread %ld\n", nread);
     if (nread == UV_EOF) {
         uv_close((uv_handle_t*)server, NULL);
-    } else if (nread > 0) {
-        fprintf(stdout, "###\tread %ld bytes: %s\n", nread, buf->base);
+    } else if (nread > 1) {
+        uv_fs_t* open_req = malloc(sizeof(uv_fs_t));
+        open_req->bufs = buf;
+        r = uv_fs_open(server->loop, open_req, server->data, O_CREAT | O_RDWR, 0644, save_file);
+        CHECK(r, "uv_fs_open");
     }
-    if (nread == 0) free(buf->base);
+    if (nread == 1) {
+        fprintf(stdout, "brak pliku\n");
+        uv_close((uv_handle_t*)server, NULL);
+    }
+}
+
+void save_file(uv_fs_t* save_req) {
+    uv_fs_t* write_req = malloc(sizeof(uv_fs_t));
+    r = uv_fs_write(save_req->loop, write_req, save_req->file, save_req->bufs, 1, 0 ,NULL);
+    CHECK(r, "uv_fs_write");
+    
+    uv_fs_t *close_req = malloc(sizeof(uv_fs_t));
+    r = uv_fs_close(save_req->loop, close_req, save_req->file, NULL);
+    CHECK(r, "uv_fs_close");
+    
+    r = uv_loop_close(save_req->loop);
+    CHECK(r, "Loop close");
 }
