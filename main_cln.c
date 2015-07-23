@@ -22,7 +22,6 @@
 void on_connect(uv_connect_t*, int);
 void alloc_buffer(uv_handle_t*, size_t, uv_buf_t*);
 void recv_file(uv_stream_t*, ssize_t, const uv_buf_t*);
-void close_file(uv_fs_t*);
 
 int r;
 
@@ -49,7 +48,7 @@ int main(int argc, char * argv[]) {
 
     free(connect);
     free(client);
-    //r = uv_loop_close(loop);
+    r = uv_loop_close(loop);
     CHECK(r, "Loop close");
     free(loop);
 
@@ -89,8 +88,17 @@ void on_connect(uv_connect_t* connect_req, int status) {
 
 void recv_file(uv_stream_t* server, ssize_t nread, const uv_buf_t* buf) {
     printf("# recv_file, nread: %ld\n", nread);
+    uv_fs_t open_req;
     if (nread == UV_EOF) {
         fprintf(stdout, "  UV_EOF\n");
+        
+        uv_fs_t close_req;
+        r = uv_fs_close(server->loop, &close_req, open_req.result, NULL);
+        CHECK(r, "uv_fs_close");
+
+        //r = uv_loop_close(server->loop);
+        //CHECK(r, "Loop close");
+        
         uv_close((uv_handle_t*) server, NULL);
     } else if (nread > 0) {
         fprintf(stdout, "  nread %ld, buffer %ld\n", nread, buf->len);
@@ -103,8 +111,8 @@ void recv_file(uv_stream_t* server, ssize_t nread, const uv_buf_t* buf) {
         fprintf(stdout, "  data_buf %ld\n", data_buf.len);
 
         printf("  uv_fs_open\n");
-        uv_fs_t open_req;
         r = uv_fs_open(server->loop, &open_req, server->data, O_CREAT | O_WRONLY | O_APPEND, 0644, NULL);
+        
 
         printf("  uv_fs_write\n");
         uv_fs_t write_req;
@@ -124,18 +132,6 @@ void recv_file(uv_stream_t* server, ssize_t nread, const uv_buf_t* buf) {
     }
     if (nread == 0) {
         fprintf(stdout, "  nread == 0\n");
-        uv_close((uv_handle_t*) server, NULL);
+        //uv_close((uv_handle_t*) server, NULL);
     }
-}
-
-void close_file(uv_fs_t* req) {
-
-    uv_fs_t close_req;
-    r = uv_fs_close(req->loop, &close_req, req->file, NULL);
-    CHECK(r, "uv_fs_close");
-
-    r = uv_loop_close(req->loop);
-    CHECK(r, "Loop close");
-
-    uv_fs_req_cleanup(&close_req);
 }
